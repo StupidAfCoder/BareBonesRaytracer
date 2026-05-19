@@ -24,6 +24,7 @@ const float VIEWPORT_WIDTH = 1.0f;
 const float VIEWPORT_HEIGHT = 1.0f;
 const float Camera_Z = 1.0f;
 const int framebuffer_size = WIDTH * HEIGHT * 3;
+const int Recursion_Depth = 3;
 
 uint8_t framebuffer[framebuffer_size];
 
@@ -36,6 +37,11 @@ struct Color
 	{
 		return { r * f , g * f , b * f };
 	}
+
+	Color operator+(Color color)
+	{
+		return { r + color.r , g + color.g , b + color.b };
+	}
 };
 
 struct Point3D
@@ -47,7 +53,6 @@ struct Point3D
 	{
 		return { x + other.x , y + other.y , z + other.z };
 	}
-	
 };
 
 inline Point3D operator*(float other, Point3D point)
@@ -98,6 +103,11 @@ struct Vec3D
 
 		return Vec3D(0.0f, 0.0f, 0.0f);
 	}
+
+	Vec3D reverse() const
+	{
+		return Vec3D(-x, -y, -z);
+	}
 };
 
 inline Vec3D operator*(float f, Vec3D v)
@@ -105,9 +115,24 @@ inline Vec3D operator*(float f, Vec3D v)
 	return Vec3D(v.x * f, v.y * f, v.z * f);
 }
 
-inline Vec3D operator+(Point3D p, Vec3D v)
+inline Vec3D operator*(Vec3D v, float f)
 {
-	return Vec3D(p.x + v.x, p.y + v.y, p.z + v.z);
+	return Vec3D(v.x * f, v.y * f, v.z * f);
+}
+
+inline Point3D operator+(Point3D p, Vec3D v)
+{
+	return Point3D(p.x + v.x, p.y + v.y, p.z + v.z);
+}
+
+inline Vec3D operator-(Point3D p, Point3D other)
+{
+	return Vec3D(p.x - other.x, p.y - other.y, p.z - other.z);
+}
+
+inline Vec3D operator-(Vec3D v, Point3D p)
+{
+	return Vec3D(v.x - p.x , v.y - p.y , v.z - p.z);
 }
 
 struct Sphere
@@ -115,8 +140,10 @@ struct Sphere
 	Point3D center;
 	float radius;
 	Color color;
+	float specular;
+	float reflective;
 
-	Sphere(Point3D center, float radius, Color color) : center(center), radius(radius), color(color) {}
+	Sphere(Point3D center, float radius, Color color, float specular, float reflective) : center(center), radius(radius), color(color), specular(specular), reflective(reflective) {}
 }; 
 
 struct IntersectData
@@ -212,48 +239,8 @@ IntersectData IntersectRaySphere(Point3D origin, Vec3D endpoint, Sphere sphere)
 	return IntersectData(t1, t2);
 }
 
-float ComputeLighting(Vec3D intersection, Vec3D normal, std::vector<Light>& lightScene)
+void ComputeIntersection(float& closest_t, Sphere*& closest_sphere, Point3D origin, Vec3D endpoint, float t_min, float t_max, std::vector<Sphere>& scene)
 {
-	float intensity = 0.0;
-	Vec3D lightVector;
-
-	for (auto& light : lightScene)
-	{
-		if (light.type == AMBIENT)
-		{
-			intensity += light.intensity;
-		}
-		else
-		{
-			if (light.type == POINT)
-			{
-				//This code gets the direction of the vector that point light is coming from , naming convention currently is not so good :)
-				lightVector = light.direction - intersection;
-			}
-			else
-			{
-				//if the light is directional we already know it's direction
-				lightVector = light.direction;
-			}
-			//To compute the diffusion reflection
-			float N_dot_L = normal.dot(lightVector);
-
-			if (N_dot_L > 0)
-			{
-				//The main computation for diffusion reflection
-				intensity += light.intensity * (N_dot_L / (normal.length() * lightVector.length()));
-			}
-		}
-	}
-
-	return intensity;
-}
-
-Color TraceRay(Point3D origin, Vec3D endpoint, float t_min , float t_max, std::vector<Sphere>& scene , std::vector<Light>& lightScene)
-{
-	//We define that the currently the closest intersection with us at infinity 
-	float closest_t = std::numeric_limits<float>::infinity();
-	Sphere* closest_sphere = nullptr;
 	for (auto& sphere : scene)
 	{
 		IntersectData data = IntersectRaySphere(origin, endpoint, sphere);
@@ -268,17 +255,107 @@ Color TraceRay(Point3D origin, Vec3D endpoint, float t_min , float t_max, std::v
 			closest_sphere = &sphere;
 		}
 	}
-	if (closest_sphere == nullptr)
+}
+
+Vec3D ReturnReflectedRay(Vec3D normal, Vec3D reflectedRay)
+{
+	return ((2 * normal * normal.dot(reflectedRay)) - reflectedRay);
+}
+
+float ComputeLighting(Point3D intersection, Vec3D normal, Vec3D viewVector , float specular , std::vector<Light>& lightScene , std::vector<Sphere>& scene)
+{
+	float intensity = 0.0;
+	Vec3D lightVector;
+	float t_max;
+
+	for (auto& light : lightScene)
 	{
-		return Color(1.0f, 1.0f, 1.0f);
+		if (light.type == AMBIENT)
+		{
+			intensity += light.intensity;
+		}
+		else
+		{
+			if (light.type == POINT)
+			{
+				//This code gets the direction of the vector that point light is coming from , naming convention currently is not so good :)
+				lightVector = light.direction - intersection;
+				t_max = 1;
+			}
+			else
+			{
+				//if the light is directional we already know it's direction
+				lightVector = light.direction;
+				t_max = std::numeric_limits<float>::infinity();
+			}
+			float shadow_t = std::numeric_limits<float>::infinity();
+			Sphere* shadow_sphere = nullptr;
+
+			ComputeIntersection(shadow_t, shadow_sphere, intersection, lightVector, 0.001f, t_max, scene);
+			if (shadow_sphere != nullptr)
+			{
+				continue;
+			}
+
+			lightVector = lightVector.normalize();
+
+			//To compute the diffusion reflection
+			float N_dot_L = normal.dot(lightVector);
+
+			if (N_dot_L > 0)
+			{
+				//The main computation for diffusion reflection
+				intensity += light.intensity * N_dot_L;
+			}
+
+			//To compute the specular reflection
+			if (specular != -1)
+			{
+				Vec3D reflectedRay = (2 * normal * N_dot_L) - lightVector;
+
+				viewVector = viewVector.normalize();
+				float R_dot_V = reflectedRay.dot(viewVector);
+				if (R_dot_V > 0)
+				{
+					intensity += light.intensity * pow(R_dot_V , specular);
+				}
+			}
+		}
 	}
 
-	Vec3D intersection = origin + (closest_t * endpoint);
-	Vec3D normal = intersection - static_cast<Vec3D>(closest_sphere->center);
+	return intensity;
+}
+
+Color TraceRay(Point3D origin, Vec3D endpoint, float t_min , float t_max, std::vector<Sphere>& scene , std::vector<Light>& lightScene , int recursion_depth)
+{
+	//We define that the currently the closest intersection with us at infinity 
+	float closest_t = std::numeric_limits<float>::infinity();
+	Sphere* closest_sphere = nullptr;
+	ComputeIntersection(closest_t, closest_sphere, origin, endpoint, t_min, t_max, scene);
+	if (closest_sphere == nullptr)
+	{
+		return Color(0.0f, 0.0f, 0.0f);
+	}
+
+	Point3D intersection = origin + (closest_t * endpoint);
+	Vec3D normal = intersection - closest_sphere->center;
 	//We then normalize our normal vector
 	normal = normal.normalize();
 
-	return closest_sphere->color * ComputeLighting(intersection , normal , lightScene);
+	Color local_color =  closest_sphere->color * ComputeLighting(intersection , normal , endpoint.reverse(),  closest_sphere->specular , lightScene , scene);
+	float r = closest_sphere->reflective;
+	if (recursion_depth <= 0 || r <= 0)
+	{
+		return local_color;
+	}
+
+	Vec3D reflectedRay = ReturnReflectedRay(normal, endpoint.reverse());
+
+	//This line has been added due to reflection acne (search the concept)
+	Point3D reflected_origin = intersection + (normal * 0.01f);
+	Color reflected_color = TraceRay(reflected_origin, reflectedRay, 0.01f, std::numeric_limits<float>::infinity(), scene, lightScene, recursion_depth - 1);
+
+	return (local_color * (1 - r)) + (reflected_color * r);
 }
 
 int main()
@@ -299,14 +376,14 @@ int main()
 	Color green(0.0f, 1.0f, 0.0f);
 	Color yellow(1.0f, 1.0f, 0.0f);
 
-	Sphere s1(center1, RADIUS, red);
-	Sphere s2(center2, RADIUS, green);
-	Sphere s3(center3, RADIUS, blue);
-	Sphere s4(center4, RADIUS_BIG, yellow);
+	Sphere s1(center1, RADIUS, red, 500.0f , 0.2f);
+	Sphere s2(center2, RADIUS, green, 10.0f , 0.4f);
+	Sphere s3(center3, RADIUS, blue, 500.0f, 0.3f);
+	Sphere s4(center4, RADIUS_BIG, yellow, 1000.0f, 0.5f);
 
-	Light l1(POINT, 0.6, Vec3D(2.0f, 1.0f, 0.0f));
-	Light l2(DIRECTIONAL, 0.2, Vec3D(1.0f, 4.0f, 4.0f));
-	Light l3(AMBIENT, 0.2);
+	Light l1(POINT, 0.6f, Vec3D(2.0f, 1.0f, 0.0f));
+	Light l2(DIRECTIONAL, 0.2f, Vec3D(1.0f, 4.0f, 4.0f));
+	Light l3(AMBIENT, 0.2f);
 	
 	std::vector<Sphere> scene = { s1 , s2 , s3 , s4};
 	std::vector<Light> lightsScene = { l1, l2 , l3 };
@@ -317,7 +394,8 @@ int main()
 		for (int y = -HEIGHT/2; y < HEIGHT/2; y++)
 		{
 			Vec3D endpoint = CanvasToViewPort(x, y);
-			Color color = TraceRay(origin, endpoint, 1, std::numeric_limits<float>::infinity(), scene, lightsScene);
+			endpoint = endpoint.normalize();
+			Color color = TraceRay(origin, endpoint, 1, std::numeric_limits<float>::infinity(), scene, lightsScene, Recursion_Depth);
 			PutPixelOnScreen(x, y, color);
 		}
 	}
