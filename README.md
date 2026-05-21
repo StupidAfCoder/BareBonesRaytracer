@@ -12,7 +12,6 @@ https://github.com/user-attachments/assets/d37d0a52-ee32-403b-86a7-0aee03718d5a
 
 
 
----
 
 ## Renders
 
@@ -36,7 +35,6 @@ https://github.com/user-attachments/assets/d37d0a52-ee32-403b-86a7-0aee03718d5a
 - Export to PNG (via stb_image_write) and PPM
 - Camera with yaw/pitch rotation via a 3x3 rotation matrix
 
----
 
 ## Dependencies
 
@@ -48,13 +46,11 @@ https://github.com/user-attachments/assets/d37d0a52-ee32-403b-86a7-0aee03718d5a
 
 No manual dependency installation is required.
 
----
 
 ## Build
 
 An internet connection is required — CMake fetches SDL3 automatically during the configure step. All other dependencies are vendored in the repo.
 
----
 
 ### Windows
 
@@ -147,7 +143,6 @@ cmake --build build
 ./build/BareBonesRaytracer
 ```
 
----
 
 ### Other Linux distros
 
@@ -172,7 +167,6 @@ Open the **Controls** panel on the right side of the window.
 
 Any change triggers an automatic re-render. An in-progress render is cancelled and restarted cleanly.
 
----
 
 ## Project Structure
 
@@ -191,7 +185,6 @@ BareBonesRaytracer/
 └── CMakeLists.txt
 ```
 
----
 
 ## Known Limitations
 
