@@ -387,7 +387,7 @@ bool SphereControls(std::vector<Sphere>& scene)
 		changed |= ImGui::SliderFloat("Specular", &s.specular, 0.0f, 1000.0f);
 		changed |= ImGui::SliderFloat("Reflective", &s.reflective, 0.0f, 1.0f);
 
-		float col[3] = { s.color.r , s.color.g , s.color.g };
+		float col[3] = { s.color.r , s.color.g , s.color.b };
 		if (ImGui::ColorEdit3("Color", col))
 		{
 			s.color.r = col[0];
