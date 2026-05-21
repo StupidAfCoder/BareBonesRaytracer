@@ -380,3 +380,6 @@ bin/
 *.o
 *.obj
 *.pdb
+
+#SDL Folder
+./SDL3-3.4.8
