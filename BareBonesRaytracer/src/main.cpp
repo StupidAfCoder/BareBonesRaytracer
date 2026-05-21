@@ -1,7 +1,7 @@
 #include<stdio.h>
-#include"ImgGui/imgui.h"
-#include"ImgGui/imgui_impl_sdl3.h"
-#include"ImgGui/imgui_impl_sdlrenderer3.h"
+#include"imgui.h"
+#include"imgui_impl_sdl3.h"
+#include"imgui_impl_sdlrenderer3.h"
 #include "models.h"
 #include<iostream>
 #include<fstream>
@@ -515,10 +515,24 @@ int main(int argc, char* argv[])
 			a_needReRender = true;
 
 		ImGui::Separator();
-		if (ImGui::Button("Save PNG"))
-			SavePNG("output.png");
-		if (ImGui::Button("Save PPM"))
-			SavePPM("output.ppm");
+		if (ImGui::Button("Save PNG")){
+			const char* basepath = SDL_GetBasePath();
+			if (basepath) {
+				std::string fullpath = std::string(basepath) + "Output/output.png";
+				SavePNG(fullpath.c_str());
+			} else {
+				SavePNG("output.png");
+			}
+		}
+		if (ImGui::Button("Save PPM")){
+			const char* basepath = SDL_GetBasePath();
+			if (basepath) {
+				std::string fullpath = std::string(basepath) + "Output/output.ppm";
+				SavePPM(fullpath.c_str());
+			} else {
+				SavePPM("output.ppm");
+			}
+		}
 		ImGui::Separator();
 
 		ImGui::End();

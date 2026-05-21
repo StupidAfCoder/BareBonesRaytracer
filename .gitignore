@@ -382,4 +382,7 @@ bin/
 *.pdb
 
 #SDL Folder
-./SDL3-3.4.8
+/BareBonesRaytracer/SDL3-3.4.8
+
+/BareBonesRaytracer/.vscode
+/BareBonesRaytracer/build
