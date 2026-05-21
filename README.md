@@ -6,15 +6,11 @@ A software raytracer written in C++ with a real-time interactive preview powered
 
 ## Demo
 
-<!-- Attach your video here. You can embed it one of two ways:
-     1. GitHub-hosted video (drag and drop the file into this README on GitHub.com):
-        GitHub will generate a link like: https://github.com/user-attachments/assets/<uuid>.mp4
-        Then embed it as:
-        https://github.com/user-attachments/assets/<uuid>.mp4
 
-     2. YouTube / external host:
-        [![Demo](https://img.youtube.com/vi/YOUR_VIDEO_ID/0.jpg)](https://www.youtube.com/watch?v=YOUR_VIDEO_ID)
--->
+
+https://github.com/user-attachments/assets/d37d0a52-ee32-403b-86a7-0aee03718d5a
+
+
 
 ---
 
