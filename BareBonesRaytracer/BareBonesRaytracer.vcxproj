@@ -102,10 +102,13 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>G:\Crazy C++\BareBonesRaytracer\BareBonesRaytracer\SDL3-3.4.8\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>G:\Crazy C++\BareBonesRaytracer\BareBonesRaytracer\SDL3-3.4.8\lib\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>SDL3.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -123,12 +126,33 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="ImgGui\imgui.cpp" />
+    <ClCompile Include="ImgGui\imgui_demo.cpp" />
+    <ClCompile Include="ImgGui\imgui_draw.cpp" />
+    <ClCompile Include="ImgGui\imgui_impl_sdl3.cpp" />
+    <ClCompile Include="ImgGui\imgui_impl_sdlrenderer3.cpp" />
+    <ClCompile Include="ImgGui\imgui_impl_win32.cpp" />
+    <ClCompile Include="ImgGui\imgui_tables.cpp" />
+    <ClCompile Include="ImgGui\imgui_widgets.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="models.h" />
     <ClCompile Include="stb_impl.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="ImgGui\imconfig.h" />
+    <ClInclude Include="ImgGui\imgui.h" />
+    <ClInclude Include="ImgGui\imgui_impl_sdl3.h" />
+    <ClInclude Include="ImgGui\imgui_impl_sdlrenderer3.h" />
+    <ClInclude Include="ImgGui\imgui_impl_win32.h" />
+    <ClInclude Include="ImgGui\imgui_internal.h" />
+    <ClInclude Include="ImgGui\imstb_rectpack.h" />
+    <ClInclude Include="ImgGui\imstb_textedit.h" />
+    <ClInclude Include="ImgGui\imstb_truetype.h" />
     <ClInclude Include="stb_image.h" />
     <ClInclude Include="stb_image_write.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="trial.ppm" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

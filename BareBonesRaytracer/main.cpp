@@ -1,9 +1,17 @@
 #include<stdio.h>
+#include"ImgGui/imgui.h"
+#include"ImgGui/imgui_impl_sdl3.h"
+#include"ImgGui/imgui_impl_sdlrenderer3.h"
+#include "models.h"
 #include<iostream>
 #include<fstream>
 #include<vector>
 #include<cmath>
 #include<algorithm>
+#include<thread>
+#include<atomic>
+#include<SDL3/SDL.h>
+#include<SDL3/SDL_main.h>
 #include "stb_image_write.h"
 
 template <typename T>
@@ -12,155 +20,26 @@ inline const T& clamp(const T& value, const T& min_val, const T& max_val)
 	return std::min(std::max(value, min_val), max_val);
 }
 
-enum TYPEOFLIGHT {
-	POINT = 0,
-	DIRECTIONAL = 1,
-	AMBIENT = 2
-};
-
-const int WIDTH = 800;
-const int HEIGHT = 600;
-const float VIEWPORT_WIDTH = 1.0f;
-const float VIEWPORT_HEIGHT = 1.0f;
+const int WIDTH = 1280;
+const int HEIGHT = 720;
+const float VIEWPORT_WIDTH = 4.0f;
+const float VIEWPORT_HEIGHT = 3.0f;
 const float Camera_Z = 1.0f;
 const int framebuffer_size = WIDTH * HEIGHT * 3;
 const int Recursion_Depth = 3;
+const float PI = 3.14159f;
+
+int selectedSphere = 0;
+Point3D origin(3, 0, 0);
+float cameraYaw = 0.0f;
+float cameraPitch = 0.0f;
+
+std::atomic<bool> a_renderInProgress(false);
+std::atomic<bool> a_renderCanceled(false);
+std::atomic<bool> a_needReRender(false);
+std::vector<std::thread> threads;
 
 uint8_t framebuffer[framebuffer_size];
-
-struct Color
-{
-	float r, g, b;
-	Color(float r, float g, float b) : r(r), g(g), b(b) {}
-	
-	Color operator*(float f)
-	{
-		return { r * f , g * f , b * f };
-	}
-
-	Color operator+(Color color)
-	{
-		return { r + color.r , g + color.g , b + color.b };
-	}
-};
-
-struct Point3D
-{
-	float x, y, z;
-	Point3D(float x, float y, float z) : x(x), y(y), z(z) {}
-
-	Point3D operator+(Point3D other) const
-	{
-		return { x + other.x , y + other.y , z + other.z };
-	}
-};
-
-inline Point3D operator*(float other, Point3D point)
-{
-	float x = other * point.x;
-	float y = other * point.y;
-	float z = other * point.z;
-	return Point3D(x, y, z);
-}
-
-struct Vec3D
-{
-	float x, y, z;
-	Vec3D(float x, float y, float z) : x(x), y(y), z(z) {}
-	Vec3D() : x(0), y(0), z(0) {}
-	explicit Vec3D(const Point3D& p) : x(p.x) , y(p.y) , z(p.z) {}
-
-	Vec3D operator-(const Vec3D& other) const
-	{
-		return { x - other.x , y - other.y , z - other.z };
-	}
-
-	Vec3D operator+(const Vec3D& other) const
-	{
-		return { x + other.x , y + other.y , z + other.z };
-	}
-
-	float dot(const Vec3D& other) const
-	{
-		return x * other.x + y * other.y + z * other.z;
-	}
-
-	float length() const
-	{
-		return sqrt((x * x) + (y * y) + (z * z));
-	}
-
-	Vec3D normalize() const
-	{
-
-		float len = length();
-
-		if (len > 1e-8f)
-		{
-			float invLen = 1.0f / len;
-			return Vec3D(x * invLen, y * invLen, z * invLen);
-		}
-
-		return Vec3D(0.0f, 0.0f, 0.0f);
-	}
-
-	Vec3D reverse() const
-	{
-		return Vec3D(-x, -y, -z);
-	}
-};
-
-inline Vec3D operator*(float f, Vec3D v)
-{
-	return Vec3D(v.x * f, v.y * f, v.z * f);
-}
-
-inline Vec3D operator*(Vec3D v, float f)
-{
-	return Vec3D(v.x * f, v.y * f, v.z * f);
-}
-
-inline Point3D operator+(Point3D p, Vec3D v)
-{
-	return Point3D(p.x + v.x, p.y + v.y, p.z + v.z);
-}
-
-inline Vec3D operator-(Point3D p, Point3D other)
-{
-	return Vec3D(p.x - other.x, p.y - other.y, p.z - other.z);
-}
-
-inline Vec3D operator-(Vec3D v, Point3D p)
-{
-	return Vec3D(v.x - p.x , v.y - p.y , v.z - p.z);
-}
-
-struct Sphere
-{
-	Point3D center;
-	float radius;
-	Color color;
-	float specular;
-	float reflective;
-
-	Sphere(Point3D center, float radius, Color color, float specular, float reflective) : center(center), radius(radius), color(color), specular(specular), reflective(reflective) {}
-}; 
-
-struct IntersectData
-{
-	float t1, t2;
-	IntersectData(float t1, float t2) : t1(t1), t2(t2) {}
-};
-
-struct Light
-{
-	TYPEOFLIGHT type;
-	float intensity;
-	Vec3D direction;
-
-	Light(TYPEOFLIGHT type, float intensity, Vec3D direction) : type(type), intensity(intensity) , direction(direction) {}
-	Light(TYPEOFLIGHT type, float intensity) : type(type) , intensity(intensity) , direction(Vec3D()) {}
-};
 
 //This function basically uses the reinhard tone map formula to clamp the values of the float from 0.0f to 1.0f (although not the best but it will work) 
 Color reinhardToneMap(Color color)
@@ -358,13 +237,218 @@ Color TraceRay(Point3D origin, Vec3D endpoint, float t_min , float t_max, std::v
 	return (local_color * (1 - r)) + (reflected_color * r);
 }
 
-int main()
+void RenderRows(int StartY, int EndY, Point3D origin, std::vector<Sphere> scene, std::vector<Light> lightsScene , Mat3D rotation_camera)
 {
+	//The loop runs according the coordiante space designed by us it get's converted to coordinate that the ppm actually loads in by putPixel
+	for (int y = StartY; y < EndY; y++)
+	{
+		for (int x = -WIDTH / 2; x < WIDTH / 2; x++)
+		{
+			if (a_renderCanceled) return;
+			Vec3D endpoint = rotation_camera * CanvasToViewPort(x, y);
+			endpoint = endpoint.normalize();
+			Color color = TraceRay(origin, endpoint, 1, std::numeric_limits<float>::infinity(), scene, lightsScene, Recursion_Depth);
+			PutPixelOnScreen(x, y, color);
+		}
+	}
+}
+
+void CancelandWait()
+{
+	a_renderCanceled = true;
+
+	for (auto& t : threads)
+	{
+		if (t.joinable()) t.join();
+	}
+	threads.clear();
+	a_renderCanceled = false;
+}
+
+void LaunchRender(Point3D origin, std::vector<Sphere> scene, std::vector<Light> lightsScene, Mat3D rotation_camera)
+{
+	CancelandWait();
 	memset(framebuffer, 0, sizeof(framebuffer));
+	
+	int numOfThreads = std::thread::hardware_concurrency();
+
+	int rowsPerThread = HEIGHT / numOfThreads;
+
+	a_renderInProgress = true;
+	
+	for (int i = 0; i < numOfThreads; i++)
+	{
+		int startY = (-HEIGHT / 2) + i * rowsPerThread;
+		int endY = (i == numOfThreads - 1) ? HEIGHT / 2 : startY + rowsPerThread;
+		threads.emplace_back(std::thread(RenderRows, startY, endY, origin, scene, lightsScene, rotation_camera));
+	}
+}
+
+Mat3D BuildCameraMatrix(float yawDeg, float pitchDeg)
+{
+	float yawRad = yawDeg * (PI / 180.0f);
+	float pitchRad = pitchDeg * (PI / 180.0f);
+
+	Mat3D yawMat(
+		Vec3D(cosf(yawRad), 0.0f, sinf(yawRad)),
+		Vec3D(0.0f, 1.0f, 0.0f),
+		Vec3D(-sinf(yawRad), 0.0f, cosf(yawRad))
+	);
+	
+	Mat3D pitchMat(
+		Vec3D(1.0f , 0.0f , 0.0f),
+		Vec3D(0.0f ,cosf(pitchRad) , -sinf(pitchRad)),
+		Vec3D(0.0f , sinf(pitchRad) , cosf(pitchRad))
+	);
+
+	return yawMat * pitchMat;
+}
+
+bool LightControls(std::vector<Light>& lightsScene)
+{
+	bool changed = false;
+	if (ImGui::CollapsingHeader("Lights"))
+	{
+		ImGui::Text("Point Light");
+		changed |= ImGui::SliderFloat("PL X", &lightsScene[0].direction.x, -20.0f, 20.0f);
+		changed |= ImGui::SliderFloat("PL Y", &lightsScene[0].direction.y, -20.0f, 20.0f);
+		changed |= ImGui::SliderFloat("PL Z", &lightsScene[0].direction.z, -20.0f, 20.0f);
+		changed |= ImGui::SliderFloat("PL Intensity", &lightsScene[0].intensity, 0.0f, 1.0f);
+
+		ImGui::Separator();
+
+		ImGui::Text("Directional Light");
+		changed |= ImGui::SliderFloat("DL X", &lightsScene[1].direction.x, -20.0f, 20.0f);
+		changed |= ImGui::SliderFloat("DL Y", &lightsScene[1].direction.y, -20.0f, 20.0f);
+		changed |= ImGui::SliderFloat("DL Z", &lightsScene[1].direction.z, -20.0f, 20.0f);
+		changed |= ImGui::SliderFloat("DL Intensity", &lightsScene[1].intensity, 0.0f, 1.0f);
+
+		ImGui::Separator();
+
+		ImGui::Text("Ambient Light");
+		changed |= ImGui::SliderFloat("AL Intensity", &lightsScene[2].intensity, 0.0f, 1.0f);
+	}
+	return changed;
+}
+
+bool CameraControls()
+{
+	bool changed = false;
+	if (ImGui::CollapsingHeader("Camera Controls"))
+	{
+		ImGui::Text("Camera Position");
+		changed |= ImGui::SliderFloat("Camera X", &origin.x, -10.0f, 10.0f);
+		changed |= ImGui::SliderFloat("Camera Y", &origin.y, -10.0f, 10.0f);
+		changed |= ImGui::SliderFloat("Camera Z", &origin.z, -10.0f, 10.0f);
+		
+		ImGui::Separator();
+
+		ImGui::Text("Camera Rotation");
+		changed |= ImGui::SliderFloat("Camera Yaw", &cameraYaw, -180.0f, 180.0f);
+		changed |= ImGui::SliderFloat("Camera Pitch", &cameraPitch, -89.0f, 89.0f);
+	}
+	return changed;
+}
+
+bool SphereControls(std::vector<Sphere>& scene)
+{
+	bool changed = false;
+	if (ImGui::CollapsingHeader("Spheres"))
+	{
+		for (int i = 0; i < (int)scene.size(); i++)
+		{
+			if (i > 0) ImGui::SameLine();
+			
+			bool isSelected = (selectedSphere == i);
+			if (isSelected)
+				ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.5f, 0.9f, 1.0f));
+			
+			char label[16];
+			snprintf(label, sizeof(label), "S %d", i + 1);
+
+			if (ImGui::Button(label))
+				selectedSphere = i;
+			if (isSelected)
+				ImGui::PopStyleColor();
+		}
+
+		ImGui::Separator();
+
+		if (selectedSphere >= (int)scene.size())
+			selectedSphere = (int)scene.size() - 1;
+
+		Sphere& s = scene[selectedSphere];
+		ImGui::PushID(selectedSphere);
+
+		changed |= ImGui::SliderFloat("X", &s.center.x, -20.0f, 20.0f);
+		changed |= ImGui::SliderFloat("Y", &s.center.y, -20.0f, 20.0f);
+		changed |= ImGui::SliderFloat("Z", &s.center.z, 0.1f, 30.0f);
+		changed |= ImGui::SliderFloat("Radius", &s.radius, 0.1f, 200.0f);
+		changed |= ImGui::SliderFloat("Specular", &s.specular, 0.0f, 1000.0f);
+		changed |= ImGui::SliderFloat("Reflective", &s.reflective, 0.0f, 1.0f);
+
+		float col[3] = { s.color.r , s.color.g , s.color.g };
+		if (ImGui::ColorEdit3("Color", col))
+		{
+			s.color.r = col[0];
+			s.color.g = col[1];
+			s.color.b = col[2];
+			changed = true;
+		}
+
+		ImGui::PopID();
+
+		ImGui::Separator();
+
+		if (ImGui::Button(" + Add Sphere") && scene.size() < 20)
+		{
+			scene.emplace_back(
+				Point3D(0.0f , 0.0f , 0.5f),
+				1.0f,
+				Color(1.0f , 1.0f , 1.0f),
+				100.0f,
+				0.0f
+			);
+			selectedSphere = (int)scene.size() - 1;
+			changed = true;
+		}
+
+		ImGui::SameLine();
+
+		if (ImGui::Button("- Remove Sphere") && scene.size() > 1)
+		{
+			scene.erase(scene.begin() + selectedSphere);
+			if (selectedSphere >= (int)scene.size() - 1)
+				selectedSphere = (int)scene.size() - 1;
+			changed = true;
+		}
+	}
+	return changed;
+}
+
+int main(int argc, char* argv[])
+{
+	if (!SDL_Init(SDL_INIT_VIDEO))
+	{
+		std::cerr << "Error during initialization of SDL. Check dependencies " << SDL_GetError() << std::endl;
+		return -1;
+	}
+
+	SDL_Window* window = SDL_CreateWindow("BareBonesRayTracer", WIDTH, HEIGHT, 0);
+	SDL_Renderer* renderer = SDL_CreateRenderer(window, NULL);
+	SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, WIDTH, HEIGHT);
+
+	IMGUI_CHECKVERSION();
+	ImGui::CreateContext();
+	ImGui_ImplSDL3_InitForSDLRenderer(window, renderer);
+	ImGui_ImplSDLRenderer3_Init(renderer);
+
+	memset(framebuffer, 0, sizeof(framebuffer));
+
+	Mat3D rotation_camera = BuildCameraMatrix(cameraYaw, cameraPitch);
 	
 	const float RADIUS = 1.0f;
 	const float RADIUS_BIG = 5000.0f;
-	Point3D origin(0, 0, 0);
 
 	Point3D center1(0, -1, 3);
 	Point3D center2(2,  0, 4);
@@ -388,18 +472,74 @@ int main()
 	std::vector<Sphere> scene = { s1 , s2 , s3 , s4};
 	std::vector<Light> lightsScene = { l1, l2 , l3 };
 
-	//The loop runs according the coordiante space designed by us it get's converted to coordinate that the ppm actually loads in by putPixel
-	for (int x = -WIDTH/2; x < WIDTH/2; x++)
+	LaunchRender(origin, scene, lightsScene, rotation_camera);
+	
+	bool running = true;
+	SDL_Event event;
+	while (running)
 	{
-		for (int y = -HEIGHT/2; y < HEIGHT/2; y++)
+
+		while (SDL_PollEvent(&event))
 		{
-			Vec3D endpoint = CanvasToViewPort(x, y);
-			endpoint = endpoint.normalize();
-			Color color = TraceRay(origin, endpoint, 1, std::numeric_limits<float>::infinity(), scene, lightsScene, Recursion_Depth);
-			PutPixelOnScreen(x, y, color);
+			ImGui_ImplSDL3_ProcessEvent(&event);
+			if (event.type == SDL_EVENT_QUIT)
+			{
+				running = false;
+			}
+
 		}
+
+		if (a_needReRender)
+		{
+			rotation_camera = BuildCameraMatrix(cameraYaw, cameraPitch);
+			a_needReRender = false;
+			LaunchRender(origin, scene, lightsScene, rotation_camera);
+		}
+
+		SDL_UpdateTexture(texture, NULL, framebuffer, WIDTH * 3);
+		SDL_RenderClear(renderer);
+		SDL_RenderTexture(renderer, texture, NULL, NULL);
+
+		ImGui_ImplSDLRenderer3_NewFrame();
+		ImGui_ImplSDL3_NewFrame();
+		ImGui::NewFrame();
+
+		ImGui::Begin("Controls");
+		bool changed = false;
+
+		changed |= LightControls(lightsScene);
+		changed |= CameraControls();
+		changed |= SphereControls(scene);
+
+		if (changed)
+			a_needReRender = true;
+
+		ImGui::Separator();
+		if (ImGui::Button("Save PNG"))
+			SavePNG("output.png");
+		if (ImGui::Button("Save PPM"))
+			SavePPM("output.ppm");
+		ImGui::Separator();
+
+		ImGui::End();
+
+		ImGui::Render();
+		ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), renderer);
+
+		SDL_RenderPresent(renderer);
+		SDL_Delay(16);
 	}
 
-	SavePPM("trial.ppm");
-	std::cout << "File has been saved!" << std::endl;
+	CancelandWait();
+
+	ImGui_ImplSDLRenderer3_Shutdown();
+	ImGui_ImplSDL3_Shutdown();
+	ImGui::DestroyContext();
+
+	SDL_DestroyTexture(texture);
+	SDL_DestroyRenderer(renderer);
+	SDL_DestroyWindow(window);
+	SDL_Quit();
+
+	return 0;
 }
