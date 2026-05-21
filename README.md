@@ -24,7 +24,6 @@ A software raytracer written in C++ with a real-time interactive preview powered
 |-------|--------|
 | Complete scene with reflections | ![complete](BareBonesRaytracer/Output/complete.png) |
 | Shadow pass | ![shadows](BareBonesRaytracer/Output/shadows.png) |
-| Early trial render | ![trial](BareBonesRaytracer/Output/trial.png) |
 | Single shadow test | ![shadow](BareBonesRaytracer/Output/shadow.png) |
 
 ---
@@ -57,17 +56,110 @@ No manual dependency installation is required.
 
 ## Build
 
-**Requirements:** CMake 3.20+, a C++14-capable compiler, and an internet connection for the SDL3 fetch.
+An internet connection is required — CMake fetches SDL3 automatically during the configure step. All other dependencies are vendored in the repo.
+
+---
+
+### Windows
+
+**1. Install prerequisites**
+
+- [Visual Studio 2019 or newer](https://visualstudio.microsoft.com/downloads/) — during install, select the **Desktop development with C++** workload. This includes MSVC and CMake.
+- [Git for Windows](https://git-scm.com/download/win)
+
+**2. Clone and build**
+
+Open **Developer Command Prompt for VS** (search for it in the Start menu — a regular terminal will not have the compiler on its PATH).
+
+```bat
+git clone https://github.com/<your-username>/BareBonesRaytracer.git
+cd BareBonesRaytracer\BareBonesRaytracer
+cmake -S . -B build
+cmake --build build --config Release
+```
+
+**3. Run**
+
+```bat
+build\Release\BareBonesRaytracer.exe
+```
+
+> If you prefer the Visual Studio GUI: after the `cmake -S . -B build` step, open `build\BareBonesRaytracer.sln`, set the configuration to **Release**, and press **Ctrl+F5**.
+
+---
+
+### macOS
+
+**1. Install prerequisites**
+
+Install Xcode Command Line Tools if you have not already:
+
+```bash
+xcode-select --install
+```
+
+Install CMake via Homebrew (install [Homebrew](https://brew.sh) first if needed):
+
+```bash
+brew install cmake
+```
+
+**2. Clone and build**
 
 ```bash
 git clone https://github.com/<your-username>/BareBonesRaytracer.git
 cd BareBonesRaytracer/BareBonesRaytracer
 cmake -S . -B build
 cmake --build build
+```
+
+**3. Run**
+
+```bash
 ./build/BareBonesRaytracer
 ```
 
-On Windows, open the generated `.sln` in Visual Studio or use `cmake --build build --config Release`.
+---
+
+### Linux (Ubuntu / Debian)
+
+**1. Install prerequisites**
+
+```bash
+sudo apt update
+sudo apt install -y git cmake build-essential \
+    libx11-dev libxext-dev libxi-dev libxrandr-dev \
+    libxcursor-dev libxinerama-dev libwayland-dev \
+    libxkbcommon-dev libasound2-dev libpulse-dev \
+    libgl1-mesa-dev
+```
+
+> These are the system libraries SDL3 needs to compile against. The build will fail with missing-header errors if they are not present.
+
+**2. Clone and build**
+
+```bash
+git clone https://github.com/<your-username>/BareBonesRaytracer.git
+cd BareBonesRaytracer/BareBonesRaytracer
+cmake -S . -B build
+cmake --build build
+```
+
+**3. Run**
+
+```bash
+./build/BareBonesRaytracer
+```
+
+---
+
+### Other Linux distros
+
+The apt package names above map to the following on other package managers:
+
+| Fedora / RHEL | Arch |
+|---------------|------|
+| `dnf install cmake gcc-c++ libX11-devel libXext-devel libXi-devel libXrandr-devel libXcursor-devel libXinerama-devel wayland-devel libxkbcommon-devel alsa-lib-devel pulseaudio-libs-devel mesa-libGL-devel` | `pacman -S cmake base-devel libx11 libxext libxi libxrandr libxcursor libxinerama wayland libxkbcommon alsa-lib pulseaudio mesa` |
 
 ---
 
